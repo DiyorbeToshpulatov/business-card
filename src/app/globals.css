@@ -1,7 +1,7 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 :root {
-  --background: #ffffff;
+  --background: #141414;
   --foreground: #171717;
 }
 
@@ -16,11 +16,78 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    padding: 0;
+    margin: 0;
   }
 }
 
 body {
   background: var(--background);
-  color: var(--foreground);
+  color: #fff;
   font-family: Arial, Helvetica, sans-serif;
+}
+
+.linkBackgroundColor {
+  background-color: #333333;
+}
+
+.neon {
+  color: #c4f82a;
+}
+
+.cardBackground {
+  background-color: #1f1f1f;
+}
+
+.outer-container {
+  background: rgba(0, 0, 0, 0.6); /* Semi-transparent dark background */
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0px 0px 20px rgba(0, 0, 0, 0.7); /* Luxurious shadow */
+}
+
+.cardBackground {
+  background-color: rgba(20, 20, 20, 0.7);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.linkBackgroundColor {
+  background-color: rgba(30, 30, 30, 0.7);
+  backdrop-filter: blur(5px);
+  transition: all 0.3s ease;
+}
+
+.linkBackgroundColor:hover {
+  background-color: rgba(40, 40, 40, 0.8);
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(196, 248, 42, 0.2);
+}
+
+.neon {
+  color: #c4f82a;
+  text-shadow: 0 0 5px rgba(196, 248, 42, 0.5);
+}
+
+/* Thunder bolt glow effect */
+@keyframes bolt-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.7));
+  }
+  50% {
+    filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.9));
+  }
+}
+
+/* Subtle background pulse for ambiance */
+@keyframes bg-pulse {
+  0%,
+  100% {
+    background-color: rgba(20, 20, 20, 1);
+  }
+  50% {
+    background-color: rgba(25, 25, 30, 1);
+  }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 
 interface RainDrop {
   x: number;
@@ -68,16 +68,12 @@ export default function WeatherEffects() {
   const fogParticlesRef = useRef<FogParticle[]>([]);
   const thunderBoltsRef = useRef<ThunderBolt[]>([]);
 
-  const requestRef = useRef<number>();
-  const fogRequestRef = useRef<number>();
-  const reflectionRequestRef = useRef<number>();
-  const timeoutRef = useRef<NodeJS.Timeout>();
-  const weatherTransitionRef = useRef<NodeJS.Timeout>();
+  const requestRef = useRef<number | null>(null);
+  const fogRequestRef = useRef<number | null>(null);
+  const reflectionRequestRef = useRef<number | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const weatherTransitionRef = useRef<NodeJS.Timeout | null>(null);
 
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const rainAudioRef = useRef<HTMLAudioElement>(null);
-
-  const [audioLoaded, setAudioLoaded] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [weatherState, setWeatherState] = useState<WeatherState>({
     windIntensity: 0.2,
@@ -90,6 +86,24 @@ export default function WeatherEffects() {
   // Track time for animations
   const timeRef = useRef<number>(0);
   const lastFrameTimeRef = useRef<number>(0);
+
+  // Helper function to create a raindrop
+  const createRaindrop = useCallback(
+    (atTop = false) => {
+      const windAngle = weatherState.windDirection;
+      const dropAngle = Math.PI / 2 + windAngle + (Math.random() * 0.2 - 0.1);
+
+      return {
+        x: Math.random() * window.innerWidth,
+        y: atTop ? -20 : Math.random() * window.innerHeight,
+        length: Math.random() * 6 + 4 + weatherState.rainIntensity * 10, // Longer drops in heavier rain
+        speed: Math.random() * 8 + 6 + weatherState.rainIntensity * 10, // Faster drops in heavier rain
+        opacity: Math.random() * 0.15 + 0.1 + weatherState.rainIntensity * 0.2, // More visible in heavier rain
+        angle: dropAngle,
+      };
+    },
+    [weatherState.windDirection, weatherState.rainIntensity]
+  );
 
   // Initialize rain drops
   useEffect(() => {
@@ -157,44 +171,14 @@ export default function WeatherEffects() {
 
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [weatherState.rainIntensity, weatherState.fogIntensity]);
-
-  // Helper function to create a raindrop
-  const createRaindrop = (atTop = false) => {
-    const windAngle = weatherState.windDirection;
-    const dropAngle = Math.PI / 2 + windAngle + (Math.random() * 0.2 - 0.1);
-
-    return {
-      x: Math.random() * window.innerWidth,
-      y: atTop ? -20 : Math.random() * window.innerHeight,
-      length: Math.random() * 6 + 4 + weatherState.rainIntensity * 10, // Longer drops in heavier rain
-      speed: Math.random() * 8 + 6 + weatherState.rainIntensity * 10, // Faster drops in heavier rain
-      opacity: Math.random() * 0.15 + 0.1 + weatherState.rainIntensity * 0.2, // More visible in heavier rain
-      angle: dropAngle,
-    };
-  };
-
-  // Load audio
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = 0.4;
-      setAudioLoaded(true);
-    }
-
-    if (rainAudioRef.current) {
-      rainAudioRef.current.volume = 0.2;
-      rainAudioRef.current.loop = true;
-      rainAudioRef.current
-        .play()
-        .catch(e => console.log('Rain audio play failed:', e));
-    }
-
-    return () => {
-      if (rainAudioRef.current) {
-        rainAudioRef.current.pause();
-      }
-    };
-  }, []);
+  }, [
+    weatherState.rainIntensity,
+    weatherState.fogIntensity,
+    weatherState.windDirection,
+    weatherState.windIntensity,
+    mousePosition,
+    createRaindrop,
+  ]);
 
   // Track mouse position for interactive effects
   useEffect(() => {
@@ -243,11 +227,6 @@ export default function WeatherEffects() {
         };
       });
 
-      // Update rain audio volume based on intensity
-      if (rainAudioRef.current) {
-        rainAudioRef.current.volume = 0.1 + weatherState.rainIntensity * 0.3;
-      }
-
       // Schedule next transition
       weatherTransitionRef.current = setTimeout(
         transitionWeather,
@@ -263,73 +242,77 @@ export default function WeatherEffects() {
         clearTimeout(weatherTransitionRef.current);
       }
     };
-  }, [weatherState]);
+  }, []);
 
   // Create a thunder bolt with fractal patterns
-  const createThunderBolt = (
-    startX: number,
-    startY: number,
-    endY: number,
-    width: number,
-    color: string,
-    branchChance = 0.5,
-    complexity = 1
-  ): ThunderBolt => {
-    const points = [{ x: startX, y: startY }];
-    let currentY = startY;
+  const createThunderBolt = useCallback(
+    (
+      startX: number,
+      startY: number,
+      endY: number,
+      width: number,
+      color: string,
+      branchChance = 0.5,
+      complexity = 1
+    ): ThunderBolt => {
+      const points = [{ x: startX, y: startY }];
+      let currentY = startY;
 
-    // More segments for more complex bolts
-    const segments = Math.floor(Math.random() * 5 * complexity) + 5;
-    const segmentHeight = (endY - startY) / segments;
+      // More segments for more complex bolts
+      const segments = Math.floor(Math.random() * 5 * complexity) + 5;
+      const segmentHeight = (endY - startY) / segments;
 
-    // Fractal pattern - more jagged with higher complexity
-    for (let i = 0; i < segments; i++) {
-      currentY += segmentHeight;
-      // Jitter increases with complexity
-      const jitter = (Math.random() * 100 - 50) * complexity;
-      points.push({
-        x: startX + jitter,
-        y: currentY,
-      });
-    }
-
-    const branches: ThunderBolt[] = [];
-
-    // Create branches with decreasing probability
-    if (width > 1 && Math.random() < branchChance) {
-      const branchCount = Math.floor(Math.random() * 2 * complexity) + 1;
-
-      for (let i = 0; i < branchCount; i++) {
-        const branchPoint = Math.floor(Math.random() * (points.length - 2)) + 1;
-        const branchStartX = points[branchPoint].x;
-        const branchStartY = points[branchPoint].y;
-        const branchEndY =
-          branchStartY + (endY - branchStartY) * (0.3 + Math.random() * 0.5);
-
-        branches.push(
-          createThunderBolt(
-            branchStartX,
-            branchStartY,
-            branchEndY,
-            width * 0.6,
-            color,
-            branchChance * 0.5,
-            complexity * 0.8 // Reduce complexity for branches
-          )
-        );
+      // Fractal pattern - more jagged with higher complexity
+      for (let i = 0; i < segments; i++) {
+        currentY += segmentHeight;
+        // Jitter increases with complexity
+        const jitter = (Math.random() * 100 - 50) * complexity;
+        points.push({
+          x: startX + jitter,
+          y: currentY,
+        });
       }
-    }
 
-    return {
-      points,
-      width,
-      opacity: 0.8 + Math.random() * 0.2,
-      color,
-      branches,
-      lifespan: 100 + Math.random() * 150,
-      currentLife: 0,
-    };
-  };
+      const branches: ThunderBolt[] = [];
+
+      // Create branches with decreasing probability
+      if (width > 1 && Math.random() < branchChance) {
+        const branchCount = Math.floor(Math.random() * 2 * complexity) + 1;
+
+        for (let i = 0; i < branchCount; i++) {
+          const branchPoint =
+            Math.floor(Math.random() * (points.length - 2)) + 1;
+          const branchStartX = points[branchPoint].x;
+          const branchStartY = points[branchPoint].y;
+          const branchEndY =
+            branchStartY + (endY - branchStartY) * (0.3 + Math.random() * 0.5);
+
+          branches.push(
+            createThunderBolt(
+              branchStartX,
+              branchStartY,
+              branchEndY,
+              width * 0.6,
+              color,
+              branchChance * 0.5,
+              complexity * 0.8 // Reduce complexity for branches
+            )
+          );
+        }
+      }
+
+      return {
+        points,
+        width,
+        opacity: 0.8 + Math.random() * 0.2,
+        color,
+        branches,
+        lifespan: 100 + Math.random() * 150,
+        currentLife: 0,
+      };
+    },
+    []
+  );
 
   // Animation loop for rain and thunder
   useEffect(() => {
@@ -541,10 +524,10 @@ export default function WeatherEffects() {
     };
   }, [
     mousePosition,
-    weatherState,
     weatherState.rainIntensity,
     weatherState.windDirection,
-    weatherState.fogIntensity,
+    weatherState.windIntensity,
+    createRaindrop,
   ]);
 
   // Fog animation on separate canvas
@@ -558,7 +541,7 @@ export default function WeatherEffects() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    const animateFog = (timestamp: number) => {
+    const animateFog = (/* timestamp: number */) => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       // Draw fog particles
@@ -624,7 +607,11 @@ export default function WeatherEffects() {
       }
       window.removeEventListener('resize', handleResize);
     };
-  }, [lightning.opacity, weatherState]);
+  }, [
+    lightning.opacity,
+    weatherState.windDirection,
+    weatherState.windIntensity,
+  ]);
 
   // Reflection effects on a third canvas
   useEffect(() => {
@@ -637,7 +624,7 @@ export default function WeatherEffects() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    const animateReflections = (timestamp: number) => {
+    const animateReflections = (/* timestamp: number */) => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       // Only draw reflections at the bottom of the screen
@@ -687,9 +674,9 @@ export default function WeatherEffects() {
       }
       window.removeEventListener('resize', handleResize);
     };
-  }, [lightning.opacity, createThunderBolt]);
+  }, [lightning.opacity, weatherState.thunderProbability]);
 
-  // Lightning and thunder effect
+  // Lightning effect
   useEffect(() => {
     const triggerLightning = () => {
       // Only trigger lightning based on probability
@@ -746,18 +733,6 @@ export default function WeatherEffects() {
 
       thunderBoltsRef.current = [...thunderBoltsRef.current, ...bolts];
 
-      // Play thunder sound with a slight delay
-      if (audioLoaded && audioRef.current) {
-        setTimeout(() => {
-          if (audioRef.current) {
-            audioRef.current.currentTime = 0;
-            audioRef.current
-              .play()
-              .catch(e => console.log('Audio play failed:', e));
-          }
-        }, 100 + Math.random() * 300);
-      }
-
       // Secondary flashes
       setTimeout(() => {
         setLightning({
@@ -796,7 +771,7 @@ export default function WeatherEffects() {
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [audioLoaded, weatherState.thunderProbability]);
+  }, [weatherState.thunderProbability, mousePosition, createThunderBolt]);
 
   // Reset lightning opacity after flash
   useEffect(() => {
@@ -873,14 +848,6 @@ export default function WeatherEffects() {
 
       {/* Screen distortion effect */}
       <div style={distortionStyle} />
-
-      {/* Audio elements */}
-      <audio ref={audioRef} preload="auto">
-        <source src="/thunder.mp3" type="audio/mpeg" />
-      </audio>
-      <audio ref={rainAudioRef} preload="auto">
-        <source src="/rain.mp3" type="audio/mpeg" />
-      </audio>
     </>
   );
 }
